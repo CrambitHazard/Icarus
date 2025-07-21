@@ -1,0 +1,7 @@
+calculator: calc.exe
+chrome: chrome.exe
+cmd: cmd.exe
+explorer: explorer.exe
+notepad: notepad.exe
+powershell: powershell.exe
+test app: C:/Program Files/Test App/testapp.exe

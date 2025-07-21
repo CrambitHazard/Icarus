@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+Always check @PRD.md and @plan.md before every single command is run. This will help you get the appropriate context, folder structure and scope.
+Always update @plan.md and its "next steps" section after finishing the current steps.

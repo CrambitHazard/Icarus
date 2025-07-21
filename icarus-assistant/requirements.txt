@@ -1,0 +1,13 @@
+# Icarus Assistant Phase 1 Requirements
+whisper
+openai-whisper
+pyaudio
+SpeechRecognition
+pyyaml
+requests
+python-dotenv
+pyttsx3 
+PyPDF2
+pytest
+langchain
+langgraph
