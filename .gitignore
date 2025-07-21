@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+*.env
+*.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and runtime files
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.pid
+*.swp
+
+# Data and cache
+data/logs/
+data/memory.sqlite
+*.cache
+.pytest_cache/
+.cache/
+*.bak
+
+# Test artifacts
+*.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+*.tmp
+*.temp
+
+# Jupyter/IPython
+.ipynb_checkpoints/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Misc
+*.old
+*.orig
+*.rej
+*.swp
+*~
+
+# Project-specific
+icarus-assistant/data/logs/
+icarus-assistant/data/memory.sqlite
+test_phase3.log
