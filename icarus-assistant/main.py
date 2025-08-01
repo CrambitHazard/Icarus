@@ -8,6 +8,8 @@ import os
 import yaml
 import json
 import uuid
+import signal
+import sys
 from stt.whisper_wrapper import WhisperSTT
 from llm.openrouter_client import OpenRouterClient
 from tts.openvoice_wrapper import OpenVoiceTTS
@@ -32,8 +34,30 @@ from orchestrator.llm_brain import LLMBrain
 from orchestrator.plan_executor import PlanExecutor
 from actions.perplexity_search import PerplexitySearch
 from orchestrator.session_manager import SessionManager
+from utils.jarvis_responses import JarvisResponses
 
 # TODO: Implement logging to data/logs/interaction_log.json
+
+def check_tts_health(tts_instance):
+    """Check if TTS is working and reinitialize if needed."""
+    if not tts_instance.available:
+        try:
+            tts_instance.stop()
+            new_tts = OpenVoiceTTS()
+            if new_tts.available:
+                return new_tts
+        except Exception as e:
+            print(f"[TTS] Failed to reinitialize TTS: {e}")
+    return tts_instance
+
+def test_tts(tts_instance):
+    """Test TTS functionality with a simple message."""
+    try:
+        # Just test if TTS is available without speaking
+        return tts_instance.available
+    except Exception as e:
+        print(f"[TTS] Test failed: {e}")
+        return False
 
 
 def load_config():
@@ -90,29 +114,43 @@ def log_interaction(user_text: str, response: str):
 
 
 def show_help():
-    print("""
-Icarus Assistant Commands:
-- help: Show this help message
-- exit: Exit the assistant
-- voice: Switch to voice mode
-- manual: Switch to manual mode
-- repeat: Repeat last response
-- clear log: Clear the interaction log
-- show log: Show the interaction log
-- search for <name>: Search for files
-- read <file>: Read a file aloud
-- launch <app>: Launch an application
-- list files: List files in a directory
-- set voice to <name>: Set TTS voice
-- set speed to <num>: Set TTS speed
-- set volume to <num>: Set TTS volume
-- mute/unmute tts: Mute or unmute TTS
-- transcribe only: Switch to transcription-only mode
-- add/map app <name> as/to <path>: Add or update app launch mapping
-- system info/list running apps/show processes: Show system/process info
-- edit/move/delete <file>: Edit, move, or delete a file (with confirmation)
-- (and more: edit, move, system tools coming soon)
+    help_text = JarvisResponses.style_response("""
+Sir, here are my available capabilities:
+
+VOICE COMMANDS:
+- "Hello" / "Hi" - Greetings
+- "Goodbye" / "Bye" - Farewell
+- "What can you do?" - List capabilities
+
+FILE OPERATIONS:
+- "Search for <filename>" - Find files
+- "Read <filename>" - Read file contents
+- "List files" - Show directory contents
+- "Edit <filename>" - Edit text files
+- "Move <filename>" - Move files
+- "Summarize <filename>" - Summarize PDFs
+
+SYSTEM TOOLS:
+- "System info" - System status
+- "Launch <app>" - Start applications
+- "What time is it?" - Current time
+- "Battery status" - Battery level
+- "CPU usage" - Processor status
+- "RAM usage" - Memory status
+
+VOICE SETTINGS:
+- "Set voice to <name>" - Change TTS voice
+- "Set speed to <number>" - Adjust speech rate
+- "Mute TTS" / "Unmute TTS" - Toggle speech
+
+MODE SWITCHING:
+- "Manual" - Switch to text input
+- "Voice" - Switch to voice input
+- "Exit" - Close assistant
+
+I'm ready to assist with any of these tasks, sir.
 """)
+    print(help_text)
 
 
 def clear_log():
@@ -152,6 +190,9 @@ def llm_disambiguate_apps(user_query: str, app_map: dict, llm) -> list:
 
 def main():
     """Main loop for Icarus Assistant Phase 3: persistent, context-aware, hands-free."""
+    # Global TTS instance for cleanup
+    global tts
+    
     # Load config and initialize components
     config = load_config()
     memory_manager = MemoryManager()
@@ -165,20 +206,54 @@ def main():
     stt = WhisperSTT()
     tts = OpenVoiceTTS()
     audio_handler = AudioHandler()
+    
+    # Set up signal handlers for clean shutdown
+    def signal_handler(sig, frame):
+        print(f"\nIcarus: {JarvisResponses.get_farewell()}")
+        if tts:
+            tts.stop()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
-    print("Icarus Assistant ready. Say 'Icarus' to activate.")
-    print("Type 'manual' for manual input mode.")
+    print("Icarus Assistant initialized. All systems operational.")
+    print("Say 'Icarus' to activate or type 'manual' for manual input mode.")
+    
+    # Test TTS functionality
+    if not test_tts(tts):
+        print("[TTS] Warning: TTS may not be working properly")
+    
+    # Initial greeting
+    initial_greeting = JarvisResponses.get_greeting()
+    print(f"Icarus: {initial_greeting}")
+    try:
+        tts.speak_sync(initial_greeting)
+    except Exception as tts_error:
+        print(f"[TTS] Error in initial greeting: {tts_error}")
+        # Try to reinitialize TTS
+        try:
+            tts.stop()
+            tts = OpenVoiceTTS()
+        except Exception as reinit_error:
+            print(f"[TTS] Failed to reinitialize: {reinit_error}")
     session_id = None
     manual_mode = False
+    tts_check_counter = 0
     
     while True:
+        # Periodic TTS health check (every 10 iterations)
+        tts_check_counter += 1
+        if tts_check_counter >= 10:
+            tts = check_tts_health(tts)
+            tts_check_counter = 0
         try:
             if not manual_mode:
                 # Wait for wake-word
                 detected = wakeword.listen_for_wakeword(wakeword="icarus", feedback=False)
                 if not detected:
                     continue
-                print("Listening...")
+                print("Icarus: I'm listening, sir...")
                 
                 # Record audio and transcribe
                 audio_file = audio_handler.record_audio(duration=5)  # Record for 5 seconds
@@ -186,21 +261,24 @@ def main():
                     user_input = stt.transcribe(audio_file)
                     print(f"You: {user_input}")
                 else:
-                    print("Failed to record audio")
+                    error_msg = JarvisResponses.get_error_response()
+                    print(f"Icarus: {error_msg}")
                     continue
             else:
                 # Manual input mode
                 user_input = input("You (manual): ")
                 if user_input.lower() == 'voice':
                     manual_mode = False
-                    print("Switched to voice mode")
+                    mode_message = JarvisResponses.style_response("I've switched to voice mode", "confirmation")
+                    print(f"Icarus: {mode_message}")
                     continue
                 elif user_input.lower() == 'exit':
                     break
             
             if user_input.lower() == 'manual':
                 manual_mode = True
-                print("Switched to manual mode")
+                mode_message = JarvisResponses.style_response("I've switched to manual mode", "confirmation")
+                print(f"Icarus: {mode_message}")
                 continue
             elif user_input.lower() == 'exit':
                 break
@@ -219,51 +297,73 @@ def main():
                 routed = intent_router.route_intent(user_input, session_id)
                 
                 for action, params in routed:
-                    if action == 'plan_mode':
-                        response = f"{params.get('result', 'No result')}"
+                    if action == 'greeting':
+                        response = JarvisResponses.get_greeting()
+                    elif action == 'farewell':
+                        response = JarvisResponses.get_farewell()
+                    elif action == 'plan_mode':
+                        response = JarvisResponses.style_response(params.get('result', 'No result'))
                     elif action == 'perplexity_search':
-                        response = f"{params.get('result', 'No result')}"
+                        response = JarvisResponses.style_response(params.get('result', 'No result'))
                     elif action == 'direct_response':
-                        response = f"{params.get('target', 'No response')}"
+                        response = JarvisResponses.style_response(params.get('target', 'No response'))
                     elif action == 'tool_call':
-                        response = f"Executed {params.get('target', 'Unknown tool')}"
+                        response = JarvisResponses.style_response(f"I've executed {params.get('target', 'Unknown tool')}", "confirmation")
                     elif action == 'function_call':
-                        response = f"Executed {params.get('target', 'Unknown function')}"
+                        response = JarvisResponses.style_response(f"I've executed {params.get('target', 'Unknown function')}", "confirmation")
                     elif action == 'llm_chat':
                         # Handle direct LLM chat
                         llm_response = openrouter_client.query(user_input)
-                        response = f"{llm_response}"
+                        response = JarvisResponses.style_response(llm_response)
                     else:
-                        response = f"Processed your request"
+                        response = JarvisResponses.style_response("I've processed your request", "confirmation")
                     
                     print(f"Icarus: {response}")
                     memory_manager.store_message(session_id, 'assistant', response)
                     
                     # Speak response if not in manual mode
                     if not manual_mode:
-                        tts.speak(response)
+                        try:
+                            tts.speak_sync(response)
+                        except Exception as tts_error:
+                            print(f"[TTS] Error speaking response: {tts_error}")
+                            # Try to reinitialize TTS
+                            try:
+                                tts.stop()
+                                tts = OpenVoiceTTS()
+                            except Exception as reinit_error:
+                                print(f"[TTS] Failed to reinitialize: {reinit_error}")
                         
             except Exception as e:
                 # Fallback to direct LLM response
                 try:
                     llm_response = openrouter_client.query(user_input)
-                    response = f"{llm_response}"
+                    response = JarvisResponses.style_response(llm_response)
                     print(f"Icarus: {response}")
                     memory_manager.store_message(session_id, 'assistant', response)
                     if not manual_mode:
-                        tts.speak(response)
+                        try:
+                            tts.speak_sync(response)
+                        except Exception as tts_error:
+                            print(f"[TTS] Error speaking response: {tts_error}")
                 except Exception as llm_error:
-                    response = f"I'm having trouble processing that request. Please try again."
+                    response = JarvisResponses.get_error_response()
                     print(f"Icarus: {response}")
                     memory_manager.store_message(session_id, 'assistant', response)
                     if not manual_mode:
-                        tts.speak(response)
+                        try:
+                            tts.speak_sync(response)
+                        except Exception as tts_error:
+                            print(f"[TTS] Error speaking response: {tts_error}")
                     
         except KeyboardInterrupt:
-            print("\nExiting Icarus Assistant.")
+            print(f"\nIcarus: {JarvisResponses.get_farewell()}")
+            # Clean up TTS
+            tts.stop()
             break
         except Exception as e:
-            print(f"[Error] {e}")
+            error_msg = JarvisResponses.get_error_response()
+            print(f"Icarus: {error_msg}")
             continue
 
 

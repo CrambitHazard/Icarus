@@ -76,6 +76,10 @@ def route_intent(user_input: str) -> List[Tuple[str, dict]]:
             verb = 'system_joke'
         elif any(k in text for k in ['summarize pdf', 'summarize this pdf', 'summarize file']) or text.startswith('summarize'):
             verb = 'summarize_pdf'
+        elif any(k in text for k in ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']):
+            verb = 'greeting'
+        elif any(k in text for k in ['bye', 'goodbye', 'see you', 'farewell', 'exit', 'quit']):
+            verb = 'farewell'
         # Propagate previous verb if missing
         if not verb and last_verb:
             verb = last_verb
@@ -213,6 +217,12 @@ def route_intent(user_input: str) -> List[Tuple[str, dict]]:
                 results.append(('summarize_pdf', {'file': fname}))
             else:
                 results.append(('summarize_pdf', {'query': text}))
+            continue
+        if verb == 'greeting':
+            results.append(('greeting', {'query': text}))
+            continue
+        if verb == 'farewell':
+            results.append(('farewell', {'query': text}))
             continue
         # Default: LLM chat
         results.append(('llm_chat', {'query': text}))

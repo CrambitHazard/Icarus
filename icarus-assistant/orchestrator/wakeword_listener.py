@@ -26,7 +26,7 @@ class WakewordListener:
         Returns:
             bool: True if wake-word detected, False if timeout.
         """
-        similar_words = [wakeword, "acer", "acres", "ikarus", "icaros", "eicarus", "ikeros", "akers", "icurus", "ikeras"]
+        similar_words = [wakeword,"jarvis", "jar wish", "acer", "acres", "ikarus", "icaros", "eicarus", "ikeros", "akers", "icurus", "ikeras"]
         if feedback:
             print(f"[WakewordListener] Say '{wakeword}' to activate. Listening...")
         with self.mic as source:
