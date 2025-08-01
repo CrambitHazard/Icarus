@@ -23,9 +23,9 @@ class OpenRouterClient:
         self.model = model
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
         if self.api_key:
-            print(f"[LLM] API Key loaded: {self.api_key[:10]}... (length: {len(self.api_key)})")
+            print(f"API Key loaded: {self.api_key[:10]}...")
         else:
-            print("[LLM] No API key found!")
+            print("No API key found!")
 
     def query(self, prompt: str) -> str:
         """Sends a prompt to the LLM and returns the response.
@@ -50,9 +50,8 @@ class OpenRouterClient:
         }
         try:
             response = requests.post(self.api_url, json=data, headers=headers, timeout=30)
-            print(f"[LLM] Status: {response.status_code}")
             if response.status_code != 200:
-                print(f"[LLM] Response: {response.text}")
+                print(f"API Error: {response.text}")
             response.raise_for_status()
             result = response.json()
             # Extract the response text (assuming OpenAI-compatible format)

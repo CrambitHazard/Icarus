@@ -52,12 +52,10 @@ class AudioHandler:
                                      rate=self.rate,
                                      input=True,
                                      frames_per_buffer=self.chunk)
-            print(f"[AudioHandler] Recording for {duration} seconds...")
             frames = []
             for _ in range(0, int(self.rate / self.chunk * duration)):
                 data = stream.read(self.chunk)
                 frames.append(data)
-            print("[AudioHandler] Recording complete.")
             stream.stop_stream()
             stream.close()
             with wave.open(filepath, 'wb') as wf:
@@ -65,13 +63,13 @@ class AudioHandler:
                 wf.setsampwidth(self.audio.get_sample_size(self.format))
                 wf.setframerate(self.rate)
                 wf.writeframes(b''.join(frames))
-            print(f"[AudioHandler] Audio file created: {filepath}")
             # Retain only the 5 most recent audio files
             audio_files = [f for f in os.listdir(self.output_dir) if f.startswith('audio_') and f.endswith('.wav')]
             audio_files.sort(reverse=True)  # Newest first
             for old_file in audio_files[5:]:
                 try:
                     os.remove(os.path.join(self.output_dir, old_file))
+                    print(f"[AudioHandler] Deleted old audio file: {old_file}")
                 except Exception as e:
                     print(f"[AudioHandler] Could not delete old audio file {old_file}: {e}")
             return filepath
@@ -81,3 +79,7 @@ class AudioHandler:
         except Exception as e:
             print(f"[AudioHandler] Error during recording: {e}")
             raise
+
+    def record_audio(self, duration: int) -> str:
+        """Alias for record method for compatibility."""
+        return self.record(duration)

@@ -1,4 +1,5 @@
-# Icarus Assistant Phase 1 Requirements
+# Icarus Assistant - Complete Requirements
+# Core dependencies
 whisper
 openai-whisper
 pyaudio
@@ -9,5 +10,55 @@ python-dotenv
 pyttsx3 
 PyPDF2
 pytest
-langchain
-langgraph
+
+# LangChain and AI (simplified versions to avoid conflicts)
+# langchain  # Commented out due to version conflicts
+# langgraph  # Commented out due to version conflicts
+
+# System and automation
+psutil
+pyautogui
+pyperclip
+
+# Audio and speech
+pyaudio
+SpeechRecognition
+
+# Additional utilities
+numpy
+torch
+tiktoken
+tqdm
+regex
+filelock
+sympy
+networkx
+jinja2
+fsspec
+setuptools
+colorama
+charset_normalizer
+idna
+urllib3
+certifi
+mpmath
+MarkupSafe
+more_itertools
+numba
+llvmlite
+typing_extensions
+
+# Additional dependencies discovered during setup
+uuid  # Built-in, but listed for clarity
+datetime  # Built-in, but listed for clarity
+json  # Built-in, but listed for clarity
+os  # Built-in, but listed for clarity
+time  # Built-in, but listed for clarity
+wave  # Built-in, but listed for clarity
+shutil  # Built-in, but listed for clarity
+subprocess  # Built-in, but listed for clarity
+difflib  # Built-in, but listed for clarity
+re  # Built-in, but listed for clarity
+tempfile  # Built-in, but listed for clarity
+sqlite3  # Built-in, but listed for clarity
+webbrowser  # Built-in, but listed for clarity

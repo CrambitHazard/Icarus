@@ -1,18 +1,16 @@
 """
 memory_manager.py
 
-LangChain memory manager for persistent conversation context.
+Simple memory manager for persistent conversation context without LangChain dependency.
 """
-from langchain.memory import ConversationBufferWindowMemory
 import sqlite3
 import datetime, json
 from typing import Optional, List, Dict
 
 class MemoryManager:
-    """Manages conversation memory using LangChain and SQLite."""
+    """Manages conversation memory using SQLite only."""
     def __init__(self, db_path: str = 'data/memory.sqlite'):
         self.db_path = db_path
-        self.memory = ConversationBufferWindowMemory(k=10)
         self._init_db()
 
     def _init_db(self) -> None:
@@ -62,11 +60,6 @@ class MemoryManager:
         c.execute('''UPDATE sessions SET last_activity = ? WHERE session_id = ?''', (datetime.datetime.now().isoformat(), session_id))
         conn.commit()
         conn.close()
-        # Also update LangChain memory
-        if role == 'user':
-            self.memory.chat_memory.add_user_message(content)
-        elif role == 'assistant':
-            self.memory.chat_memory.add_ai_message(content)
 
     def get_history(self, session_id: str) -> List[Dict]:
         conn = sqlite3.connect(self.db_path)
@@ -101,4 +94,34 @@ class MemoryManager:
         c.execute('''UPDATE sessions SET context_summary = ? WHERE session_id = ?''', (summary, session_id))
         conn.commit()
         conn.close()
-        return summary 
+        return summary
+
+    def get_context_window(self, session_id: str, max_messages: int = 10) -> str:
+        """Get recent conversation context for LLM input."""
+        history = self.get_history(session_id)
+        recent_messages = history[-max_messages:]
+        return '\n'.join([f"{m['role']}: {m['content']}" for m in recent_messages])
+
+    def clear_session(self, session_id: str) -> None:
+        """Clear all messages for a session."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('''DELETE FROM messages WHERE session_id = ?''', (session_id,))
+        conn.commit()
+        conn.close()
+
+    def get_session_info(self, session_id: str) -> Optional[Dict]:
+        """Get session information."""
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute('''SELECT session_id, created_at, last_activity, session_name FROM sessions WHERE session_id = ?''', (session_id,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return {
+                'session_id': row[0],
+                'created_at': row[1],
+                'last_activity': row[2],
+                'session_name': row[3]
+            }
+        return None 

@@ -7,6 +7,7 @@ Main loop for Icarus Assistant MVP: STT → LLM → TTS + File reading.
 import os
 import yaml
 import json
+import uuid
 from stt.whisper_wrapper import WhisperSTT
 from llm.openrouter_client import OpenRouterClient
 from tts.openvoice_wrapper import OpenVoiceTTS
@@ -152,46 +153,112 @@ def llm_disambiguate_apps(user_query: str, app_map: dict, llm) -> list:
 def main():
     """Main loop for Icarus Assistant Phase 3: persistent, context-aware, hands-free."""
     # Load config and initialize components
+    config = load_config()
     memory_manager = MemoryManager()
-    openrouter_client = OpenRouterClient(api_key='${OPENROUTER_API_KEY}', model='gpt-4')
+    openrouter_client = OpenRouterClient(api_key=config['api_key'], model=config['model'])
     session_manager = SessionManager(memory_manager)
     intent_router = ContextAwareIntentRouter(memory_manager, openrouter_client)
     wakeword = WakewordListener()
     perplexity = PerplexitySearch()
-    # ... (initialize TTS, STT, etc.)
+    
+    # Initialize STT and TTS
+    stt = WhisperSTT()
+    tts = OpenVoiceTTS()
+    audio_handler = AudioHandler()
 
-    print("[Persistent Mode] Say 'Icarus' to activate.")
+    print("Icarus Assistant ready. Say 'Icarus' to activate.")
+    print("Type 'manual' for manual input mode.")
     session_id = None
+    manual_mode = False
+    
     while True:
         try:
-            # Wait for wake-word
-            detected = wakeword.listen_for_wakeword(wakeword="icarus", feedback=True)
-            if not detected:
-                print("[Persistent Mode] No wake-word detected. Waiting again...")
+            if not manual_mode:
+                # Wait for wake-word
+                detected = wakeword.listen_for_wakeword(wakeword="icarus", feedback=False)
+                if not detected:
+                    continue
+                print("Listening...")
+                
+                # Record audio and transcribe
+                audio_file = audio_handler.record_audio(duration=5)  # Record for 5 seconds
+                if audio_file:
+                    user_input = stt.transcribe(audio_file)
+                    print(f"You: {user_input}")
+                else:
+                    print("Failed to record audio")
+                    continue
+            else:
+                # Manual input mode
+                user_input = input("You (manual): ")
+                if user_input.lower() == 'voice':
+                    manual_mode = False
+                    print("Switched to voice mode")
+                    continue
+                elif user_input.lower() == 'exit':
+                    break
+            
+            if user_input.lower() == 'manual':
+                manual_mode = True
+                print("Switched to manual mode")
                 continue
-            print("[Persistent Mode] Listening for your command...")
-            # Record and transcribe audio (stub)
-            user_input = input("You (simulated STT): ")
+            elif user_input.lower() == 'exit':
+                break
+            elif user_input.lower() == 'help':
+                show_help()
+                continue
+            
             if not session_id:
                 session_id = str(uuid.uuid4())
                 session_manager.create_session(session_id)
+            
             memory_manager.store_message(session_id, 'user', user_input)
+            
             # Route intent
-            routed = intent_router.route_intent(user_input, session_id)
-            for action, params in routed:
-                if action == 'plan_mode':
-                    print(f"[Plan Mode] {params['result']}")
-                elif action == 'perplexity_search':
-                    print(f"[Perplexity] {params['result']}")
-                elif action == 'direct_response':
-                    print(f"[Assistant] {params.get('target')}")
-                elif action == 'tool_call':
-                    print(f"[Tool] {params.get('target')} with {params.get('parameters')}")
-                elif action == 'function_call':
-                    print(f"[Function] {params.get('target')} with {params.get('parameters')}")
-                else:
-                    print(f"[Other] {params}")
-                memory_manager.store_message(session_id, 'assistant', str(params))
+            try:
+                routed = intent_router.route_intent(user_input, session_id)
+                
+                for action, params in routed:
+                    if action == 'plan_mode':
+                        response = f"{params.get('result', 'No result')}"
+                    elif action == 'perplexity_search':
+                        response = f"{params.get('result', 'No result')}"
+                    elif action == 'direct_response':
+                        response = f"{params.get('target', 'No response')}"
+                    elif action == 'tool_call':
+                        response = f"Executed {params.get('target', 'Unknown tool')}"
+                    elif action == 'function_call':
+                        response = f"Executed {params.get('target', 'Unknown function')}"
+                    elif action == 'llm_chat':
+                        # Handle direct LLM chat
+                        llm_response = openrouter_client.query(user_input)
+                        response = f"{llm_response}"
+                    else:
+                        response = f"Processed your request"
+                    
+                    print(f"Icarus: {response}")
+                    memory_manager.store_message(session_id, 'assistant', response)
+                    
+                    # Speak response if not in manual mode
+                    if not manual_mode:
+                        tts.speak(response)
+                        
+            except Exception as e:
+                # Fallback to direct LLM response
+                try:
+                    llm_response = openrouter_client.query(user_input)
+                    response = f"{llm_response}"
+                    print(f"Icarus: {response}")
+                    memory_manager.store_message(session_id, 'assistant', response)
+                    if not manual_mode:
+                        tts.speak(response)
+                except Exception as llm_error:
+                    response = f"I'm having trouble processing that request. Please try again."
+                    print(f"Icarus: {response}")
+                    memory_manager.store_message(session_id, 'assistant', response)
+                    if not manual_mode:
+                        tts.speak(response)
+                    
         except KeyboardInterrupt:
             print("\nExiting Icarus Assistant.")
             break
